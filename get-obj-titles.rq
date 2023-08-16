@@ -1,0 +1,57 @@
+#+ summary: Get the declared titles for cultural objects
+#+ method: GET
+#+ pagination: 1000
+#+ endpoint_in_url: False
+
+prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+prefix np: <http://www.nanopub.org/nschema#>
+prefix npa: <http://purl.org/nanopub/admin/>
+prefix npx: <http://purl.org/nanopub/x/>
+prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+prefix dct: <http://purl.org/dc/terms/>
+
+select distinct ?np ?label ?obj ?title ?creator ?date where {
+  graph npa:graph {
+    ?np npa:hasHeadGraph ?h .
+    ?np dct:created ?date .
+    ?np npa:hasValidSignatureForPublicKey ?pubkey .
+  }
+  graph ?h {
+    ?np np:hasAssertion ?a .
+    ?np np:hasPublicationInfo ?i.
+  }
+  graph ?a {
+    ?__obj_iri dct:title ?title .
+    bind(?__obj_iri as ?obj)  # so we can use ?obj as optional placeholder as well as query result entry
+  }
+  graph ?i {
+    ?np rdfs:label ?label .
+    ?np dct:creator ?creator .
+    ?np npx:hasNanopubType <https://www.wikidata.org/entity/Q210272> .  # "cultural heritage"
+  }
+  filter not exists {  # filtering out nanopubs that have newer versions; this will be simpler/easier with the next-generation query services
+    graph npa:graph {
+      ?newversion npa:hasHeadGraph ?nh .
+      ?newversion npa:hasValidSignatureForPublicKey ?pubkey .
+    }
+    graph ?nh {
+      ?newversion np:hasPublicationInfo ?ni .
+    }
+    graph ?ni {
+      ?newversion npx:supersedes ?np .
+    }
+  }
+  filter not exists {  # filtering out nanopubs that have been retracted; this will be simpler/easier with the next-generation query services
+    graph npa:graph {
+      ?retraction npa:hasHeadGraph ?rh .
+      ?retraction npa:hasValidSignatureForPublicKey ?pubkey .
+    }
+    graph ?rh {
+      ?retraction np:hasAssertion ?ra .
+    }
+    graph ?ra {
+      ?somebody npx:retracts ?np .
+    }
+  }
+}
+order by desc(?date)
